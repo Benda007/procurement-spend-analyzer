@@ -1,0 +1,28 @@
+Supplier,Category,Spend,Year
+ACME Manufacturing,Production Equipment,125000,2023
+Global Tools Ltd,Production Equipment,98000,2023
+TechSupply Co,IT Services,45000,2023
+Office Pro,Office Supplies,12000,2023
+Clean Services,Facility Management,28000,2023
+ACME Manufacturing,Production Equipment,142000,2024
+Global Tools Ltd,Production Equipment,105000,2024
+TechSupply Co,IT Services,52000,2024
+Office Pro,Office Supplies,11500,2024
+Clean Services,Facility Management,31000,2024
+Rapid Parts,MRO Supplies,67000,2024
+AutoTech Solutions,Production Equipment,89000,2024
+Digital Systems,IT Services,38000,2024
+Green Facility,Facility Management,22000,2024
+Supply Chain Pro,Logistics,44000,2024
+ACME Manufacturing,Production Equipment,158000,2025
+Global Tools Ltd,Production Equipment,112000,2025
+TechSupply Co,IT Services,61000,2025
+Office Pro,Office Supplies,13200,2025
+Clean Services,Facility Management,34000,2025
+Rapid Parts,MRO Supplies,73000,2025
+AutoTech Solutions,Production Equipment,95000,2025
+Digital Systems,IT Services,44000,2025
+Green Facility,Facility Management,26000,2025
+Supply Chain Pro,Logistics,51000,2025
+Industrial Supply,MRO Supplies,41000,2025
+Smart Automation,Production Equipment,78000,2025
