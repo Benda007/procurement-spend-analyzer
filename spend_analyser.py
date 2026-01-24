@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import argparse
 import sys
 import glob
+import csv
 import os
 from pathlib import Path
 from datetime import datetime
@@ -49,6 +50,15 @@ def choose_file():
         print("✗ Invalid input")
         sys.exit(1)
 
+def detect_sep(path):
+    with open(path, newline='', encoding='utf-8') as f:
+        sample = f.read(2048)
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters=",;|\t")
+        return dialect.delimiter
+    except Exception:
+        return ","
+
 
 class SpendAnalyzer:
     def __init__(self, file_path):
@@ -62,11 +72,11 @@ class SpendAnalyzer:
             suffix = Path(self.file_path).suffix.lower()
 
             if suffix == ".csv":
-                # If your CSV uses semicolons, pass csv_sep=";" when calling load_data
                 if csv_sep:
-                    self.df = pd.read_csv(self.file_path, sep=csv_sep)
+                    sep = csv_sep
                 else:
-                    self.df = pd.read_csv(self.file_path)
+                    sep = detect_sep(self.file_path)
+                self.df = pd.read_csv(self.file_path, sep=sep)
             elif suffix in [".xls", ".xlsx"]:
                 xls = pd.ExcelFile(self.file_path)
                 frames = [pd.read_excel(xls, sheet_name=sheet) for sheet in xls.sheet_names]
@@ -77,7 +87,6 @@ class SpendAnalyzer:
             else:
                 raise ValueError(f"Unsupported file format: {suffix}")
 
-            # Basic validations
             if not isinstance(self.df, pd.DataFrame):
                 print("✗ Loaded object is not a DataFrame")
                 sys.exit(1)
@@ -92,7 +101,6 @@ class SpendAnalyzer:
             print(f"✗ Error loading data: {e}")
             sys.exit(1)
 
-        # Standardize column names immediately after loading
         self.standardize_columns()
 
     def standardize_columns(self):
@@ -174,7 +182,7 @@ class SpendAnalyzer:
         """Perform spend analysis calculations."""
         if self.df is None:
             print("✗ No data loaded, cannot analyze")
-            sys.exit(1)
+            sys.exit(1) 
 
         top_suppliers = self.df.groupby("supplier")["spend"].sum().nlargest(10).sort_values(ascending=True)
 
@@ -197,6 +205,7 @@ class SpendAnalyzer:
             "supplier_count": int(self.df["supplier"].nunique())
         }
         print("✓ Analysis complete")
+        return self.results
 
     def report(self):
         """Generate text summary report."""
@@ -297,18 +306,25 @@ if __name__ == "__main__":
         "file", nargs="?", default=None,
         help="Path to input data file (CSV/XLS/XLSX). If not provided, sample_data.* will be used."
     )
+    parser.add_argument("--sep", "-s", default=None, help="CSV separator (e.g. ',' or ';').")
+    parser.add_argument(
+        "--export-format", "-e", choices=["xlsx", "csv"], default="xlsx",
+        help="Export format for cleaned data. Fallback to CSV if Excel writer missing."
+    )
+
     args = parser.parse_args()
 
-    # If user provided a file, use it. Otherwise fall back to sample_data.*
+    # Determine input file path
     if args.file:
         file_path = args.file
     else:
         file_path = choose_file()
 
+    # Create analyzer and run pipeline, pass CSV separator if provided
     analyzer = SpendAnalyzer(file_path)
-    analyzer.load_data()
+    analyzer.load_data(csv_sep=args.sep)
     analyzer.clean_data()
     analyzer.analyze()
     analyzer.report()
     analyzer.visualize()
-    analyzer.export()
+    analyzer.export(output_path=f"cleaned_data.{args.export_format}")
