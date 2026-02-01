@@ -11,8 +11,15 @@ import sys
 import glob
 import csv
 import os
+import logging
 from pathlib import Path
 from datetime import datetime
+from typing import Optional, Dict, Any
+
+
+
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+logger = logging.getLogger(__name__)
 
 COLUMN_MAP = {
     "supplier": ["supplier", "vendor", "supplier name", "nominated supplier", "counterpart"],
@@ -29,7 +36,8 @@ def choose_file():
         files.extend(glob.glob(f"sample_data.{ext}"))
 
     if not files:
-        print("✗ No sample_data file found (csv/xls/xlsx)")
+        # print("✗ No sample_data file found (csv/xls/xlsx)")
+        logger.error("No sample_data file found (csv/xls/xlsx)")
         sys.exit(1)
 
     print("\nAvailable files:")
@@ -44,10 +52,12 @@ def choose_file():
         if 1 <= choice <= len(files):
             return files[choice - 1]
         else:
-            print("✗ Invalid choice")
+            # print("✗ Invalid choice")
+            logger.error("Invalid choice")
             sys.exit(1)
     except ValueError:
-        print("✗ Invalid input")
+        # print("✗ Invalid input")
+        logger.error("Invalid input")
         sys.exit(1)
 
 def detect_sep(path):
@@ -88,17 +98,21 @@ class SpendAnalyzer:
                 raise ValueError(f"Unsupported file format: {suffix}")
 
             if not isinstance(self.df, pd.DataFrame):
-                print("✗ Loaded object is not a DataFrame")
+                # print("✗ Loaded object is not a DataFrame")
+                logger.error("Loaded object is not a DataFrame")
                 sys.exit(1)
 
             if self.df.empty or len(self.df.columns) == 0:
-                print("✗ The file is empty or has no columns")
+                # print("✗ The file is empty or has no columns")
+                logger.error("The file is empty or has no columns")
                 sys.exit(1)
 
-            print(f"✓ Loaded {len(self.df)} records from {self.file_path}")
+            # print(f"✓ Loaded {len(self.df)} records from {self.file_path}")
+            logger.info(f"Loaded {len(self.df)} records from {self.file_path}")
 
         except Exception as e:
-            print(f"✗ Error loading data: {e}")
+            # print(f"✗ Error loading data: {e}")
+            logger.error(f"Error loading data: {e}")
             sys.exit(1)
 
         self.standardize_columns()
@@ -106,7 +120,8 @@ class SpendAnalyzer:
     def standardize_columns(self):
         """Rename columns to unified internal names (supplier, spend, category, year)."""
         if self.df is None:
-            print("✗ No data loaded, cannot standardize columns")
+            # print("✗ No data loaded, cannot standardize columns")
+            logger.error("No data loaded, cannot standardize columns")
             sys.exit(1)
 
         # Normalize column names: strip and lowercase
@@ -129,21 +144,24 @@ class SpendAnalyzer:
         required = ["supplier", "spend"]
         missing_required = [col for col in required if col not in self.df.columns]
         if missing_required:
-            print(f"✗ Missing required columns: {missing_required}")
+            # print(f"✗ Missing required columns: {missing_required}")
+            logger.error(f"Missing required columns: {missing_required}")
             sys.exit(1)
 
         # Optional columns
         optional = ["category", "year"]
         missing_optional = [col for col in optional if col not in self.df.columns]
         if missing_optional:
-            print(f"⚠ Warning: Missing optional columns: {missing_optional}. Some analyses will be skipped.")
-
-        print("✓ Column names standardized")
+            # print(f"⚠ Warning: Missing optional columns: {missing_optional}. Some analyses will be skipped.")
+            logger.warning(f"Missing optional columns: {missing_optional}. Some analyses will be skipped.") 
+        # print("✓ Column names standardized")
+        logger.info("Column names standardized")
 
     def clean_data(self):
         """Clean and standardize data formats."""
         if self.df is None:
-            print("✗ No data loaded, cannot clean")
+            # print("✗ No data loaded, cannot clean")
+            logger.error("No data loaded, cannot clean")
             sys.exit(1)
 
         # Convert spend to numeric
@@ -173,15 +191,18 @@ class SpendAnalyzer:
         self.df = self.df[self.df["spend"] >= 0]
 
         if self.df.empty:
-            print("✗ No valid rows after cleaning")
+            # print("✗ No valid rows after cleaning")
+            logger.error("No valid rows after cleaning")
             sys.exit(1)
 
-        print("✓ Data cleaned and standardized")
+        # print("✓ Data cleaned and standardized")
+        logger.info("Data cleaned and standardized")    
 
     def analyze(self):
         """Perform spend analysis calculations."""
         if self.df is None:
-            print("✗ No data loaded, cannot analyze")
+            # print("✗ No data loaded, cannot analyze")
+            logger.error("No data loaded, cannot analyze")
             sys.exit(1) 
 
         top_suppliers = self.df.groupby("supplier")["spend"].sum().nlargest(10).sort_values(ascending=True)
@@ -204,7 +225,8 @@ class SpendAnalyzer:
             "avg_spend": float(self.df["spend"].mean()),
             "supplier_count": int(self.df["supplier"].nunique())
         }
-        print("✓ Analysis complete")
+        # print("✓ Analysis complete")
+        logger.info("Analysis complete")
         return self.results
 
     def report(self):
@@ -242,7 +264,8 @@ class SpendAnalyzer:
     def visualize(self, output_path="spend_analysis.png"):
         """Generate visual charts from analysis results."""
         if self.results is None:
-            print("✗ No results to visualize")
+            # print("✗ No results to visualize")
+            logger.error("No results to visualize")
             sys.exit(1)
 
         r = self.results
@@ -276,27 +299,32 @@ class SpendAnalyzer:
         plt.tight_layout()
         plt.savefig(output_path, dpi=300, bbox_inches="tight")
         plt.close(fig)
-        print(f"✓ Visualization saved to {output_path}")
+        # print(f"✓ Visualization saved to {output_path}")
+        logger.info(f"Visualization saved to {output_path}")
 
     def export(self, output_path="cleaned_data.xlsx"):
         """Export cleaned data to Excel, fallback to CSV if openpyxl missing."""
         if self.df is None:
-            print("✗ No data to export")
+            # print("✗ No data to export")
+            logger.error("No data to export")
             sys.exit(1)
 
         # Try Excel first
         try:
             # pandas will use openpyxl for .xlsx; if missing, this will raise
             self.df.to_excel(output_path, index=False)
-            print(f"✓ Cleaned data exported to {output_path}")
+            # print(f"✓ Cleaned data exported to {output_path}")
+            logger.info(f"Cleaned data exported to {output_path}")
         except Exception as e:
             # Fallback to CSV
             fallback = Path(output_path).with_suffix(".csv")
             try:
                 self.df.to_csv(fallback, index=False)
-                print(f"⚠ Could not write Excel ({e}). Saved CSV fallback to {fallback}")
+                # print(f"⚠ Could not write Excel ({e}). Saved CSV fallback to {fallback}")
+                logger.warning(f"Could not write Excel ({e}). Saved CSV fallback to {fallback}")    
             except Exception as e2:
-                print(f"✗ Export failed: {e2}")
+                # print(f"✗ Export failed: {e2}") 
+                logger.error(f"Export failed: {e2}")
                 sys.exit(1)
 
 
