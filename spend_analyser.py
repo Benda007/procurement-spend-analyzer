@@ -29,8 +29,8 @@ COLUMN_MAP = {
 }
 
 
-def choose_file():
-    """Let user choose a sample_data file by index."""
+def choose_file() -> str:
+    """Let user choose a sample_data file from current directory by index and return its path."""
     files = []
     for ext in ["csv", "xls", "xlsx"]:
         files.extend(glob.glob(f"sample_data.{ext}"))
@@ -71,12 +71,13 @@ def detect_sep(path):
 
 
 class SpendAnalyzer:
-    def __init__(self, file_path):
-        self.file_path = file_path
-        self.df = None
-        self.results = None
+    def __init__(self, file_path: str | Path) -> None:
+        """Initialize spend analyser with path to input file."""
+        self.file_path: Path = Path(file_path)
+        self.df: Optional[pd.DataFrame] = None
+        self.results: Optional[Dict[str, Any]] = None
 
-    def load_data(self, csv_sep=None):
+    def load_data(self, csv_sep: Optional[str] = None) -> None:
         """Load data from CSV or Excel (all sheets combined)."""
         try:
             suffix = Path(self.file_path).suffix.lower()
@@ -117,7 +118,7 @@ class SpendAnalyzer:
 
         self.standardize_columns()
 
-    def standardize_columns(self):
+    def standardize_columns(self) -> None:
         """Rename columns to unified internal names (supplier, spend, category, year)."""
         if self.df is None:
             # print("✗ No data loaded, cannot standardize columns")
@@ -157,8 +158,14 @@ class SpendAnalyzer:
         # print("✓ Column names standardized")
         logger.info("Column names standardized")
 
-    def clean_data(self):
-        """Clean and standardize data formats."""
+    def clean_data(self) -> None:
+        """Clean and standardize data formats for analysis.
+        
+        - Converts 'spend' column to numeric. 
+        - Normalizes supplier and category text fields.
+        - Drops rows with missing or invalid spend.
+        - Removes duplicates and negative spend values.
+        - """
         if self.df is None:
             # print("✗ No data loaded, cannot clean")
             logger.error("No data loaded, cannot clean")
@@ -198,8 +205,8 @@ class SpendAnalyzer:
         # print("✓ Data cleaned and standardized")
         logger.info("Data cleaned and standardized")    
 
-    def analyze(self):
-        """Perform spend analysis calculations."""
+    def analyze(self) -> Dict[str, Any]:
+        """Perform spend analysis and store results dictionary."""
         if self.df is None:
             # print("✗ No data loaded, cannot analyze")
             logger.error("No data loaded, cannot analyze")
@@ -229,10 +236,11 @@ class SpendAnalyzer:
         logger.info("Analysis complete")
         return self.results
 
-    def report(self):
-        """Generate text summary report."""
+    def report(self) -> None:
+        """Print a readable text summary report."""
         if self.results is None:
-            print("✗ No results to report")
+            # print("✗ No results to report")
+            logger.error("No results to report")
             sys.exit(1)
 
         r = self.results
@@ -261,8 +269,12 @@ class SpendAnalyzer:
 
         print("=" * 60 + "\n")
 
-    def visualize(self, output_path="spend_analysis.png"):
-        """Generate visual charts from analysis results."""
+    def visualize(self, output_path: str ="spend_analysis.png") -> None:
+        """Generate and save visual charts from analysis results.
+        Panels: 
+        - Top suppliers by spend. 
+        - Spend by category (if available).
+        - Year-over-year spend trend (if available)."""
         if self.results is None:
             # print("✗ No results to visualize")
             logger.error("No results to visualize")
@@ -302,8 +314,12 @@ class SpendAnalyzer:
         # print(f"✓ Visualization saved to {output_path}")
         logger.info(f"Visualization saved to {output_path}")
 
-    def export(self, output_path="cleaned_data.xlsx"):
-        """Export cleaned data to Excel, fallback to CSV if openpyxl missing."""
+    def export(self, output_path: str = "cleaned_data.xlsx") -> None:
+        """Export cleaned data to Excel, fallback to CSV if Excel write fails.
+        
+        Args: 
+            output_path (str): Desired output file path (should end with .xlsx or .csv). 
+                               If Excel write fails, will save as CSV with same name."""
         if self.df is None:
             # print("✗ No data to export")
             logger.error("No data to export")
