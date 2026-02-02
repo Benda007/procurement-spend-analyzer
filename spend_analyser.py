@@ -15,12 +15,17 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any, NoReturn
 
-
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 COLUMN_MAP = {
-    "supplier": ["supplier", "vendor", "supplier name", "nominated supplier", "counterpart"],
+    "supplier": [
+        "supplier",
+        "vendor",
+        "supplier name",
+        "nominated supplier",
+        "counterpart",
+    ],
     "spend": ["spend", "amount", "value", "cost"],
     "category": ["category", "group", "type"],
     "year": ["year", "fiscal year", "period"],
@@ -96,7 +101,9 @@ def parse_spend(series: pd.Series) -> pd.Series:
 
         # EU: 1.234,56  -> remove dots, replace comma -> dot
         eu = both & ~us
-        s = s.mask(eu, s.str.replace(".", "", regex=False).str.replace(",", ".", regex=False))
+        s = s.mask(
+            eu, s.str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
+        )
 
     # Only comma: 123,45 -> 123.45
     only_comma = has_comma & ~has_dot
@@ -121,14 +128,21 @@ class SpendAnalyzer:
                 sep = csv_sep or detect_sep(self.file_path)
                 # encoding_errors='replace' pomůže, když se objeví „divné“ znaky
                 try:
-                    self.df = pd.read_csv(self.file_path, sep=sep, encoding_errors="replace")
+                    self.df = pd.read_csv(
+                        self.file_path, sep=sep, encoding_errors="replace"
+                    )
                 except TypeError:
                     self.df = pd.read_csv(self.file_path, sep=sep)
 
             elif suffix in [".xls", ".xlsx"]:
                 with pd.ExcelFile(self.file_path) as xls:
-                    frames = [pd.read_excel(xls, sheet_name=sheet) for sheet in xls.sheet_names]
-                self.df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+                    frames = [
+                        pd.read_excel(xls, sheet_name=sheet)
+                        for sheet in xls.sheet_names
+                    ]
+                self.df = (
+                    pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+                )
 
             else:
                 raise ValueError(f"Unsupported file format: {suffix}")
@@ -169,7 +183,9 @@ class SpendAnalyzer:
         optional = ["category", "year"]
         missing_optional = [col for col in optional if col not in self.df.columns]
         if missing_optional:
-            logger.warning(f"Missing optional columns: {missing_optional}. Some analyses will be skipped.")
+            logger.warning(
+                f"Missing optional columns: {missing_optional}. Some analyses will be skipped."
+            )
 
         logger.info("Column names standardized")
 
@@ -198,13 +214,19 @@ class SpendAnalyzer:
                 out = pd.Series(pd.NA, index=df.index, dtype="Int64")
 
                 is_year = ys.str.fullmatch(r"\d{4}", na=False)
-                out.loc[is_year] = pd.to_numeric(ys.loc[is_year], errors="coerce").astype("Int64")
+                out.loc[is_year] = pd.to_numeric(
+                    ys.loc[is_year], errors="coerce"
+                ).astype("Int64")
 
                 rem = out.isna() & ys.notna()
                 if rem.any():
                     try:
-                        dt = pd.to_datetime(ys.loc[rem], format="%Y-%m-%d", errors="raise")
-                        out.loc[rem] = pd.Series(dt.dt.year.to_numpy(), index=ys.loc[rem].index).astype("Int64")
+                        dt = pd.to_datetime(
+                            ys.loc[rem], format="%Y-%m-%d", errors="raise"
+                        )
+                        out.loc[rem] = pd.Series(
+                            dt.dt.year.to_numpy(), index=ys.loc[rem].index
+                        ).astype("Int64")
                     except Exception:
                         examples = ys.loc[rem].head(5).tolist()
                         die(f"{YEAR_ALLOWED_HELP} Found: {examples}")
@@ -227,7 +249,7 @@ class SpendAnalyzer:
         # Drop rows without spend value
         df = df.dropna(subset=["spend"])
 
-        # comment in case you wan to inlude debit notes 
+        # comment in case you wan to inlude debit notes
         df = df.loc[df["spend"] >= 0].copy()
 
         # Remove duplicates
@@ -241,15 +263,24 @@ class SpendAnalyzer:
 
     def analyze(self) -> Dict[str, Any]:
         """Perform spend analysis and store results dictionary."""
-        if self.df.empty or "supplier" not in self.df.columns or "spend" not in self.df.columns:
+        if (
+            self.df.empty
+            or "supplier" not in self.df.columns
+            or "spend" not in self.df.columns
+        ):
             die("No data to analyze. Run load_data() and clean_data() first.")
 
         top_suppliers = (
-            self.df.groupby("supplier", dropna=True)["spend"].sum().nlargest(10).sort_values(ascending=True)
+            self.df.groupby("supplier", dropna=True)["spend"]
+            .sum()
+            .nlargest(10)
+            .sort_values(ascending=True)
         )
 
         spend_by_category = (
-            self.df.groupby("category", dropna=True)["spend"].sum().sort_values(ascending=True)
+            self.df.groupby("category", dropna=True)["spend"]
+            .sum()
+            .sort_values(ascending=True)
             if "category" in self.df.columns
             else pd.Series(dtype=float)
         )
@@ -303,7 +334,9 @@ class SpendAnalyzer:
             last_val = float(r["yoy_trend"].loc[latest])
 
             if prev_val == 0:
-                print(f"YoY Growth ({previous} → {latest}): n/a (previous year spend = 0)")
+                print(
+                    f"YoY Growth ({previous} → {latest}): n/a (previous year spend = 0)"
+                )
             else:
                 growth = ((last_val / prev_val) - 1) * 100
                 print(f"YoY Growth ({previous} → {latest}): {growth:+.1f}%")
@@ -318,7 +351,9 @@ class SpendAnalyzer:
         r = self.results
 
         fig, axes = plt.subplots(1, 3, figsize=(18, 5))
-        fig.suptitle("Procurement Spend Analysis Dashboard", fontsize=16, fontweight="bold")
+        fig.suptitle(
+            "Procurement Spend Analysis Dashboard", fontsize=16, fontweight="bold"
+        )
 
         # Top suppliers
         if not r["top_suppliers"].empty:
@@ -336,7 +371,9 @@ class SpendAnalyzer:
 
         # YoY trend
         if not r["yoy_trend"].empty:
-            r["yoy_trend"].plot(kind="line", ax=axes[2], marker="o", color="green", linewidth=2)
+            r["yoy_trend"].plot(
+                kind="line", ax=axes[2], marker="o", color="green", linewidth=2
+            )
             axes[2].set_title("Year-over-Year Spend Trend")
             axes[2].grid(True, alpha=0.3)
         else:
@@ -372,12 +409,15 @@ class SpendAnalyzer:
                 fallback = out.with_suffix(".csv")
                 try:
                     self.df.to_csv(fallback, index=False)
-                    logger.warning(f"Could not write Excel ({e}). Saved CSV fallback to {fallback}")
+                    logger.warning(
+                        f"Could not write Excel ({e}). Saved CSV fallback to {fallback}"
+                    )
                     return
                 except Exception as e2:
                     die(f"Export failed: {e2}")
 
         die(f"Unsupported export format: '{suffix}'. Use .xlsx or .csv.")
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Procurement Spend Analyzer")
@@ -387,7 +427,9 @@ def main() -> None:
         default=None,
         help="Path to input data file (CSV/XLS/XLSX). If not provided, sample_data.* will be used.",
     )
-    parser.add_argument("--sep", "-s", default=None, help="CSV separator (e.g. ',' or ';').")
+    parser.add_argument(
+        "--sep", "-s", default=None, help="CSV separator (e.g. ',' or ';')."
+    )
     parser.add_argument(
         "--export-format",
         "-e",
@@ -407,6 +449,7 @@ def main() -> None:
     analyzer.report()
     analyzer.visualize()
     analyzer.export(output_path=f"cleaned_data.{args.export_format}")
+
 
 if __name__ == "__main__":
     main()
