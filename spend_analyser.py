@@ -79,17 +79,27 @@ def detect_sep(path: str | Path) -> str:
 
 
 def parse_spend(series: pd.Series) -> pd.Series:
-    """Parse spend values robustly for common EU/US number formats."""
     s = series.astype("string").str.strip()
-    # odstraní měny, mezery, NBSP, apod. nechá jen čísla, tečku, čárku a mínus
-    s = s.str.replace(r"[^0-9,\.\-]", "", regex=True)
+    s = s.str.replace(r"[^0-9,.\-]", "", regex=True)
 
-    # Pokud je tam současně tečka i čárka, typicky EU formát 1.234,56
-    both = s.str.contains(",", na=False) & s.str.contains(r"\.", na=False)
-    s = s.mask(both, s.str.replace(".", "", regex=False).str.replace(",", ".", regex=False))
+    has_comma = s.str.contains(",", na=False)
+    has_dot = s.str.contains(r"\.", na=False)
+    both = has_comma & has_dot
 
-    # Pokud je jen čárka, ber ji jako desetinnou
-    only_comma = s.str.contains(",", na=False) & ~s.str.contains(r"\.", na=False)
+    if both.any():
+        last_comma = s.str.rfind(",")
+        last_dot = s.str.rfind(".")
+
+        # US: 1,234.56  -> remove commas
+        us = both & (last_dot > last_comma)
+        s = s.mask(us, s.str.replace(",", "", regex=False))
+
+        # EU: 1.234,56  -> remove dots, replace comma -> dot
+        eu = both & ~us
+        s = s.mask(eu, s.str.replace(".", "", regex=False).str.replace(",", ".", regex=False))
+
+    # Only comma: 123,45 -> 123.45
+    only_comma = has_comma & ~has_dot
     s = s.mask(only_comma, s.str.replace(",", ".", regex=False))
 
     return pd.to_numeric(s, errors="coerce")
@@ -110,11 +120,14 @@ class SpendAnalyzer:
             if suffix == ".csv":
                 sep = csv_sep or detect_sep(self.file_path)
                 # encoding_errors='replace' pomůže, když se objeví „divné“ znaky
-                self.df = pd.read_csv(self.file_path, sep=sep, encoding_errors="replace")
+                try:
+                    self.df = pd.read_csv(self.file_path, sep=sep, encoding_errors="replace")
+                except TypeError:
+                    self.df = pd.read_csv(self.file_path, sep=sep)
 
             elif suffix in [".xls", ".xlsx"]:
-                xls = pd.ExcelFile(self.file_path)
-                frames = [pd.read_excel(xls, sheet_name=sheet) for sheet in xls.sheet_names]
+                with pd.ExcelFile(self.file_path) as xls:
+                    frames = [pd.read_excel(xls, sheet_name=sheet) for sheet in xls.sheet_names]
                 self.df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
             else:
@@ -191,7 +204,7 @@ class SpendAnalyzer:
                 if rem.any():
                     try:
                         dt = pd.to_datetime(ys.loc[rem], format="%Y-%m-%d", errors="raise")
-                        out.loc[rem] = pd.Series(dt.dt.year.values, index=ys.loc[rem].index).astype("Int64")
+                        out.loc[rem] = pd.Series(dt.dt.year.to_numpy(), index=ys.loc[rem].index).astype("Int64")
                     except Exception:
                         examples = ys.loc[rem].head(5).tolist()
                         die(f"{YEAR_ALLOWED_HELP} Found: {examples}")
@@ -214,8 +227,8 @@ class SpendAnalyzer:
         # Drop rows without spend value
         df = df.dropna(subset=["spend"])
 
-        # Remove negative spend (spend inluding debit notes is included by >= -...)
-        df = df.loc[df["spend"] >= -0].copy()
+        # comment in case you wan to inlude debit notes 
+        df = df.loc[df["spend"] >= 0].copy()
 
         # Remove duplicates
         df = df.drop_duplicates()
