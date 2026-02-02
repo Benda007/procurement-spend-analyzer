@@ -189,7 +189,7 @@ class SpendAnalyzer:
 
         logger.info("Column names standardized")
 
-    def clean_data(self) -> None:
+    def clean_data(self, keep_negative_spend: bool = False) -> None:
         """Clean and standardize data formats for analysis."""
         if self.df.empty or "spend" not in self.df.columns:
             die("No data loaded or missing 'spend' column. Run load_data() first.")
@@ -249,8 +249,9 @@ class SpendAnalyzer:
         # Drop rows without spend value
         df = df.dropna(subset=["spend"])
 
-        # comment in case you wan to inlude debit notes
-        df = df.loc[df["spend"] >= 0].copy()
+        # Negative spend handling (credits / debit notes)
+        if not keep_negative_spend:
+            df = df.loc[df["spend"] >= 0].copy()
 
         # Remove duplicates
         df = df.drop_duplicates()
@@ -433,6 +434,9 @@ def main() -> None:
     parser.add_argument(
         "--export-format",
         "-e",
+        "--keep-negative",
+            action="store_true",
+            help="Keep negative spend values (credits/debit notes) instead of filtering them out.",    
         choices=["xlsx", "csv"],
         default="xlsx",
         help="Export format for cleaned data. Fallback to CSV if Excel writer missing.",
@@ -444,7 +448,7 @@ def main() -> None:
 
     analyzer = SpendAnalyzer(file_path)
     analyzer.load_data(csv_sep=args.sep)
-    analyzer.clean_data()
+    analyzer.clean_data(keep_negative_spend=args.keep_negative)
     analyzer.analyze()
     analyzer.report()
     analyzer.visualize()
