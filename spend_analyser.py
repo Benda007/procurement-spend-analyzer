@@ -46,13 +46,13 @@ def choose_file() -> str:
     if not files:
         die("No sample_data file found (csv/xls/xlsx)")
 
-    print("Available files:")
+    print("\nAvailable files:")
     for i, f in enumerate(files, start=1):
         stat = os.stat(f)
         modified = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
         print(f"{i}. {Path(f).name} (modified: {modified})")
 
-    choice = input("Select a file by number: ")
+    choice = input("\nSelect a file by number: ")
     try:
         idx = int(choice)
         if 1 <= idx <= len(files):
@@ -216,7 +216,7 @@ class SpendAnalyzer:
                 examples = df.loc[bad, "year"].head(5).tolist()
                 die(f"{YEAR_ALLOWED_HELP} Suspicious range 2000–2100, e.g.: {examples}")
 
-        # Clean text fields (convert NaN to 'nan')
+        # Clean text fields (do not convert NA -> 'nan')
         if "supplier" in df.columns:
             s = df["supplier"].astype("string").str.strip()
             df["supplier"] = s.where(s.notna(), pd.NA).str.title()
@@ -279,7 +279,7 @@ class SpendAnalyzer:
 
         r = self.results
 
-        print("" + "=" * 60)
+        print("=" * 60)
         print("PROCUREMENT SPEND ANALYSIS REPORT")
         print("=" * 60)
         print(f"Total Spend: €{r['total_spend']:,.2f}")
@@ -380,8 +380,6 @@ class SpendAnalyzer:
         die(f"Unsupported export format: '{suffix}'. Use .xlsx or .csv.")
 
 def main() -> None:
-
-# if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Procurement Spend Analyzer")
     parser.add_argument(
         "file",
