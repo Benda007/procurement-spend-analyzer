@@ -379,8 +379,9 @@ class SpendAnalyzer:
 
         die(f"Unsupported export format: '{suffix}'. Use .xlsx or .csv.")
 
+def main() -> None:
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Procurement Spend Analyzer")
     parser.add_argument(
         "file",
@@ -408,3 +409,6 @@ if __name__ == "__main__":
     analyzer.report()
     analyzer.visualize()
     analyzer.export(output_path=f"cleaned_data.{args.export_format}")
+
+if __name__ == "__main__":
+    main()
