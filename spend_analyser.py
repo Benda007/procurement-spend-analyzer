@@ -7,14 +7,13 @@ Author: Jean Kocman
 import pandas as pd
 import matplotlib.pyplot as plt
 import argparse
-import sys
 import glob
 import csv
 import os
 import logging
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, NoReturn, cast
 
 
 
@@ -27,18 +26,25 @@ COLUMN_MAP = {
     "category": ["category", "group", "type"],
     "year": ["year", "fiscal year", "period"]
 }
+YEAR_ALLOWED_HELP = (
+    "Column 'Year' must be in format YYYY (e.g., 2024) or YYYY-MM-DD (e.g., 2024-03-15). "
+    "Other formats are not supported; please correct the input data accordingly."
+)
+
+def die(msg: str) -> NoReturn:
+    logger.error(msg)
+    raise SystemExit(1)
 
 
 def choose_file() -> str:
     """Let user choose a sample_data file from current directory by index and return its path."""
     files = []
     for ext in ["csv", "xls", "xlsx"]:
-        files.extend(glob.glob(f"sample_data.{ext}"))
+        files.extend(glob.glob(f"sample_data*.{ext}"))
 
     if not files:
-        # print("✗ No sample_data file found (csv/xls/xlsx)")
-        logger.error("No sample_data file found (csv/xls/xlsx)")
-        sys.exit(1)
+        die("No sample_data file found (csv/xls/xlsx)")
+
 
     print("\nAvailable files:")
     for i, f in enumerate(files, start=1):
@@ -52,13 +58,9 @@ def choose_file() -> str:
         if 1 <= choice <= len(files):
             return files[choice - 1]
         else:
-            # print("✗ Invalid choice")
-            logger.error("Invalid choice")
-            sys.exit(1)
+            die("Invalid choice")
     except ValueError:
-        # print("✗ Invalid input")
-        logger.error("Invalid input")
-        sys.exit(1)
+        die("Invalid input")
 
 def detect_sep(path):
     with open(path, newline='', encoding='utf-8') as f:
@@ -74,9 +76,9 @@ class SpendAnalyzer:
     def __init__(self, file_path: str | Path) -> None:
         """Initialize spend analyser with path to input file."""
         self.file_path: Path = Path(file_path)
-        self.df: Optional[pd.DataFrame] = None
+        self.df: pd.DataFrame = pd.DataFrame()
         self.results: Optional[Dict[str, Any]] = None
-
+        
     def load_data(self, csv_sep: Optional[str] = None) -> None:
         """Load data from CSV or Excel (all sheets combined)."""
         try:
@@ -99,32 +101,22 @@ class SpendAnalyzer:
                 raise ValueError(f"Unsupported file format: {suffix}")
 
             if not isinstance(self.df, pd.DataFrame):
-                # print("✗ Loaded object is not a DataFrame")
-                logger.error("Loaded object is not a DataFrame")
-                sys.exit(1)
-
+                die("Loaded object is not a DataFrame")
+                
             if self.df.empty or len(self.df.columns) == 0:
-                # print("✗ The file is empty or has no columns")
-                logger.error("The file is empty or has no columns")
-                sys.exit(1)
+                die("The file is empty or has no columns")
 
-            # print(f"✓ Loaded {len(self.df)} records from {self.file_path}")
             logger.info(f"Loaded {len(self.df)} records from {self.file_path}")
 
         except Exception as e:
-            # print(f"✗ Error loading data: {e}")
-            logger.error(f"Error loading data: {e}")
-            sys.exit(1)
+            die(f"Error loading data: {e}")
 
         self.standardize_columns()
 
     def standardize_columns(self) -> None:
         """Rename columns to unified internal names (supplier, spend, category, year)."""
-        if self.df is None:
-            # print("✗ No data loaded, cannot standardize columns")
-            logger.error("No data loaded, cannot standardize columns")
-            sys.exit(1)
-
+        if self.df.empty or len(self.df.columns) == 0:
+            die("No data loaded, cannot standardize columns. Run load_data() first.")
         # Normalize column names: strip and lowercase
         self.df.columns = self.df.columns.str.strip().str.lower()
 
@@ -145,73 +137,108 @@ class SpendAnalyzer:
         required = ["supplier", "spend"]
         missing_required = [col for col in required if col not in self.df.columns]
         if missing_required:
-            # print(f"✗ Missing required columns: {missing_required}")
-            logger.error(f"Missing required columns: {missing_required}")
-            sys.exit(1)
+            die(f"Missing required columns: {missing_required}")
 
         # Optional columns
         optional = ["category", "year"]
         missing_optional = [col for col in optional if col not in self.df.columns]
         if missing_optional:
-            # print(f"⚠ Warning: Missing optional columns: {missing_optional}. Some analyses will be skipped.")
-            logger.warning(f"Missing optional columns: {missing_optional}. Some analyses will be skipped.") 
-        # print("✓ Column names standardized")
+            logger.warning(f"Missing optional columns: {missing_optional}. Some analyses will be skipped.")
         logger.info("Column names standardized")
 
     def clean_data(self) -> None:
         """Clean and standardize data formats for analysis.
-        
-        - Converts 'spend' column to numeric. 
+
+        - Converts 'spend' column to numeric.
         - Normalizes supplier and category text fields.
         - Drops rows with missing or invalid spend.
         - Removes duplicates and negative spend values.
-        - """
-        if self.df is None:
-            # print("✗ No data loaded, cannot clean")
-            logger.error("No data loaded, cannot clean")
-            sys.exit(1)
+        - Enforces Year format: YYYY or ISO YYYY-MM-DD (optional column).
+        """
+        if self.df.empty or "spend" not in self.df.columns:
+            die("No data loaded or missing 'spend' column. Run load_data() first.")
 
-        # Convert spend to numeric
-        self.df["spend"] = pd.to_numeric(self.df["spend"], errors="coerce")
+        df = self.df  # local alias
 
-        # If year exists, try to coerce to integer year
-        if "year" in self.df.columns:
-            try:
-                self.df["year"] = pd.to_datetime(self.df["year"], errors="coerce").dt.year
-            except Exception:
-                # fallback: try numeric conversion
-                self.df["year"] = pd.to_numeric(self.df["year"], errors="coerce")
+        # spend -> numeric
+        # TBD - Oprava: před to_numeric() „očistit“ měny, mezery a sjednotit desetinný oddělovač.
+        df["spend"] = pd.to_numeric(df["spend"], errors="coerce")
+
+
+
+        # year -> supports only YYYY or ISO YYYY-MM-DD (optional)
+        if "year" in df.columns:
+            logger.info(f"year dtype before parse: {df['year'].dtype}")
+
+            y = cast(pd.Series, df["year"])
+
+            # numeric years like 2026
+            if pd.api.types.is_numeric_dtype(y):
+                df["year"] = pd.to_numeric(y, errors="coerce").astype("Int64")
+            else:
+                ys = cast(pd.Series, y.astype("string").str.strip())
+
+                # allow empty values -> keep as NA
+                na_like = ys.str.lower().isin(["", "nan", "none", "nat"])
+                ys = ys.mask(na_like, "")
+
+                # (a) pure year YYYY
+                is_year = ys.str.fullmatch(r"\d{4}")
+                out = pd.Series(pd.NA, index=df.index, dtype="Int64")
+
+                nums = cast(pd.Series, pd.to_numeric(ys[is_year], errors="coerce"))
+                out.loc[is_year] = nums.astype("Int64")
+
+                # (b) remaining non-empty must be ISO date YYYY-MM-DD
+                rem = out.isna() & ys.ne("")
+                if rem.any():
+                    try:
+                        dt = pd.to_datetime(ys[rem], format="%Y-%m-%d", errors="raise")
+                        out.loc[rem] = pd.Series(pd.DatetimeIndex(dt).year, index=ys[rem].index).astype("Int64")
+                    except Exception:
+                        examples = ys[rem].head(5).tolist()
+                        die(f"{YEAR_ALLOWED_HELP} Found: {examples}")
+
+                    df["year"] = out
+
+                # sanity check range
+                bad = df["year"].notna() & ((df["year"] < 2000) | (df["year"] > 2100))
+                if bad.any():
+                    die(f"{YEAR_ALLOWED_HELP} Suspicious range 2000–2100, e.g.: {df.loc[bad, 'year'].head(5).tolist()}")
+
+                df["year"] = out
+
+            # sanity check range
+            bad = df["year"].notna() & ((df["year"] < 2000) | (df["year"] > 2100))
+            if bad.any():
+                die(f"{YEAR_ALLOWED_HELP} Suspicious range 2000–2100, e.g.: {df.loc[bad, 'year'].head(5).tolist()}")
 
         # Clean text fields
-        if "supplier" in self.df.columns:
-            self.df["supplier"] = self.df["supplier"].astype(str).str.strip().str.title()
-        if "category" in self.df.columns:
-            self.df["category"] = self.df["category"].astype(str).str.strip().str.title()
+        if "supplier" in df.columns:
+            df["supplier"] = df["supplier"].astype(str).str.strip().str.title()
+        if "category" in df.columns:
+            df["category"] = df["category"].astype(str).str.strip().str.title()
 
         # Drop rows without spend value
-        self.df = self.df.dropna(subset=["spend"])
+        df = df.dropna(subset=["spend"])
 
         # Remove duplicates
-        self.df = self.df.drop_duplicates()
+        df = df.drop_duplicates()
 
-        # Remove negative or zero spend if that is desired (keep zero if you want)
-        self.df = self.df[self.df["spend"] >= 0]
+        # Remove negative spend
+        df = cast(pd.DataFrame, df.loc[df["spend"] >= 0, :].copy())
 
-        if self.df.empty:
-            # print("✗ No valid rows after cleaning")
-            logger.error("No valid rows after cleaning")
-            sys.exit(1)
+        if df.empty:
+            die("No valid rows after cleaning")
 
-        # print("✓ Data cleaned and standardized")
-        logger.info("Data cleaned and standardized")    
-
+        self.df = df
+        logger.info("Data cleaned and standardized")
+    
+    
     def analyze(self) -> Dict[str, Any]:
         """Perform spend analysis and store results dictionary."""
-        if self.df is None:
-            # print("✗ No data loaded, cannot analyze")
-            logger.error("No data loaded, cannot analyze")
-            sys.exit(1) 
-
+        if self.df.empty or "supplier" not in self.df.columns or "spend" not in self.df.columns:
+            die("No data to analyze. Run load_data() and clean_data() first.")
         top_suppliers = self.df.groupby("supplier")["spend"].sum().nlargest(10).sort_values(ascending=True)
 
         if "category" in self.df.columns:
@@ -239,9 +266,7 @@ class SpendAnalyzer:
     def report(self) -> None:
         """Print a readable text summary report."""
         if self.results is None:
-            # print("✗ No results to report")
-            logger.error("No results to report")
-            sys.exit(1)
+            die("No results to report")
 
         r = self.results
 
@@ -276,9 +301,7 @@ class SpendAnalyzer:
         - Spend by category (if available).
         - Year-over-year spend trend (if available)."""
         if self.results is None:
-            # print("✗ No results to visualize")
-            logger.error("No results to visualize")
-            sys.exit(1)
+            die("No results to visualize")
 
         r = self.results
 
@@ -311,37 +334,48 @@ class SpendAnalyzer:
         plt.tight_layout()
         plt.savefig(output_path, dpi=300, bbox_inches="tight")
         plt.close(fig)
-        # print(f"✓ Visualization saved to {output_path}")
         logger.info(f"Visualization saved to {output_path}")
 
     def export(self, output_path: str = "cleaned_data.xlsx") -> None:
-        """Export cleaned data to Excel, fallback to CSV if Excel write fails.
-        
-        Args: 
-            output_path (str): Desired output file path (should end with .xlsx or .csv). 
-                               If Excel write fails, will save as CSV with same name."""
-        if self.df is None:
-            # print("✗ No data to export")
-            logger.error("No data to export")
-            sys.exit(1)
+        """Export cleaned data to Excel or CSV.
 
-        # Try Excel first
-        try:
-            # pandas will use openpyxl for .xlsx; if missing, this will raise
-            self.df.to_excel(output_path, index=False)
-            # print(f"✓ Cleaned data exported to {output_path}")
-            logger.info(f"Cleaned data exported to {output_path}")
-        except Exception as e:
-            # Fallback to CSV
-            fallback = Path(output_path).with_suffix(".csv")
+        - If output_path ends with .csv -> write CSV
+        - If output_path ends with .xlsx -> write Excel (fallback to CSV if Excel writer missing)
+        """
+        if self.df.empty:
+            die("No data to export (empty dataframe).")
+
+        out = Path(output_path)
+        suffix = out.suffix.lower()
+
+        # 1) CSV requested -> write CSV directly
+        if suffix == ".csv":
             try:
-                self.df.to_csv(fallback, index=False)
-                # print(f"⚠ Could not write Excel ({e}). Saved CSV fallback to {fallback}")
-                logger.warning(f"Could not write Excel ({e}). Saved CSV fallback to {fallback}")    
-            except Exception as e2:
-                # print(f"✗ Export failed: {e2}") 
-                logger.error(f"Export failed: {e2}")
-                sys.exit(1)
+                self.df.to_csv(out, index=False)
+                logger.info(f"Cleaned data exported to {out}")
+                return
+            except Exception as e:
+                die(f"CSV export failed: {e}")
+
+        # 2) Excel requested -> try Excel, fallback to CSV
+        if suffix in (".xlsx", ".xls"):
+            try:
+                self.df.to_excel(out, index=False)
+                logger.info(f"Cleaned data exported to {out}")
+                return
+            except Exception as e:
+                fallback = out.with_suffix(".csv")
+                try:
+                    self.df.to_csv(fallback, index=False)
+                    logger.warning(
+                        f"Could not write Excel ({e}). Saved CSV fallback to {fallback}"
+                    )
+                    return
+                except Exception as e2:
+                    die(f"Export failed: {e2}")
+
+        # 3) Unknown extension -> fail fast with clear message
+        die(f"Unsupported export format: '{suffix}'. Use .xlsx or .csv.")
 
 
 if __name__ == "__main__":
