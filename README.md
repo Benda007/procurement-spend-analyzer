@@ -46,7 +46,7 @@ This tool automates the entire spend analysis workflow:
 ```bash
 python -m venv .venv
 # Windows:
-.venv\Scriptsctivate
+.venv\ScriptsActivate
 # macOS/Linux:
 source .venv/bin/activate
 ```
