@@ -428,18 +428,18 @@ def main() -> None:
         default=None,
         help="Path to input data file (CSV/XLS/XLSX). If not provided, sample_data.* will be used.",
     )
-    parser.add_argument(
-        "--sep", "-s", default=None, help="CSV separator (e.g. ',' or ';')."
-    )
+    parser.add_argument("--sep", "-s", default=None, help="CSV separator (e.g. ',' or ';').")
     parser.add_argument(
         "--export-format",
         "-e",
-        "--keep-negative",
-            action="store_true",
-            help="Keep negative spend values (credits/debit notes) instead of filtering them out.",    
         choices=["xlsx", "csv"],
         default="xlsx",
         help="Export format for cleaned data. Fallback to CSV if Excel writer missing.",
+    )
+    parser.add_argument(
+        "--keep-negative",
+        action="store_true",
+        help="Keep negative spend values (credits/debit notes) instead of filtering them out.",
     )
 
     args = parser.parse_args()

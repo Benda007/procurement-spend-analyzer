@@ -20,12 +20,12 @@ Procurement teams often spend hours every month manually analyzing spend data in
 ## 💡 Solution
 
 This tool automates the entire spend analysis workflow:
-- Loads data from CSV / Excel (.xlsx + .xls) exports
-- Standardizes column names using a built-in synonym mapping (e.g., vendor → supplier)
+- Loads data from CSV / Excel (`.xlsx` + legacy `.xls`) exports
+- Standardizes column names using a built-in synonym mapping (e.g., *vendor* → *supplier*)
 - Cleans and validates spend + year formats (including EU/US number formats)
 - Calculates key metrics: top suppliers, category breakdown, YoY trends
-- Generates charts and saves a dashboard image (spend_analysis.png)
-- Exports cleaned data to Excel (cleaned_data.xlsx) or CSV
+- Generates charts and saves a dashboard image (`spend_analysis.png`)
+- Exports cleaned data to Excel (`cleaned_data.xlsx`) or CSV
 
 ---
 
@@ -34,8 +34,8 @@ This tool automates the entire spend analysis workflow:
 - Python 3.10+ (uses modern typing like `str | Path`)
 - Pandas (data processing)
 - Matplotlib (visualization)
-- openpyxl (export to .xlsx)
-- xlrd (read legacy .xls files)
+- openpyxl (export to `.xlsx`)
+- xlrd (read legacy `.xls` files)
 
 ---
 
@@ -46,7 +46,7 @@ This tool automates the entire spend analysis workflow:
 ```bash
 python -m venv .venv
 # Windows:
-.venv\Scripts\activate
+.venv\Scriptsctivate
 # macOS/Linux:
 source .venv/bin/activate
 ```
@@ -68,9 +68,9 @@ python spend_analyser.py path/to/your_file.csv
 ```
 
 If you do not provide a file path, the script searches for files named like:
-- sample_data*.csv
-- sample_data*.xls
-- sample_data*.xlsx
+- `sample_data*.csv`
+- `sample_data*.xls`
+- `sample_data*.xlsx`
 
 …and lets you choose one interactively:
 
@@ -82,8 +82,9 @@ python spend_analyser.py
 
 - `--sep` / `-s` : set CSV separator manually (e.g. `;` for EU exports)
 - `--export-format` / `-e` : choose export format (`xlsx` or `csv`)
+- `--keep-negative` : keep negative spend values (credits/debit notes) instead of filtering them out
 
-Examples:
+### Examples
 
 ```bash
 # CSV with semicolon delimiter, export cleaned data to CSV
@@ -93,6 +94,11 @@ python spend_analyser.py data.csv --sep ";" --export-format csv
 ```bash
 # Excel input, export cleaned data to Excel
 python spend_analyser.py data.xlsx --export-format xlsx
+```
+
+```bash
+# Keep negative spend values (credits / debit notes) for net spend analysis
+python spend_analyser.py data.xlsx --keep-negative
 ```
 
 ---
@@ -115,15 +121,17 @@ The script lowercases and trims headers, then maps them to internal names:
 ## 🧹 Data Cleaning Rules
 
 ### Spend parsing (EU + US formats)
+
 The tool tries to handle typical formats such as:
 - `1 234,56`
 - `1.234,56`
 - `1,234.56`
 - currency symbols / spaces
 
-Invalid amounts become NaN and are removed during cleaning.
+Invalid amounts become `NaN` and are removed during cleaning.
 
 ### Year parsing
+
 If the `year` column exists, it must be either:
 - `YYYY` (e.g., `2024`)
 - `YYYY-MM-DD` (e.g., `2024-03-15`)
@@ -131,8 +139,9 @@ If the `year` column exists, it must be either:
 Other formats are rejected with a clear error message.
 
 ### Negative spend
-Current default behavior: filters out negative spend values.
-Planned improvement: add CLI switch to keep negative spend (credits/debit notes).
+
+Default behavior: filters out negative spend values.
+Use `--keep-negative` to keep credits/debit notes for net spend analysis.
 
 ---
 
@@ -153,18 +162,6 @@ After running, you get:
 3) Clean dataset export:
 - `cleaned_data.xlsx` (default)
 - or `cleaned_data.csv` (if `--export-format csv`)
-
----
-
-## 🛠 Planned / Next Step (CLI improvement)
-
-A planned CLI option:
-
-```bash
-python spend_analyser.py data.xlsx --keep-negative
-```
-
-This will keep negative spend values (credits / debit notes) for net spend analysis.
 
 ---
 
