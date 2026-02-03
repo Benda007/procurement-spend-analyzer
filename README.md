@@ -170,6 +170,7 @@ After running, you get:
 - Focused on a repeatable, business-oriented workflow used in procurement analytics.
 - Designed to be robust across typical ERP exports (encoding issues, separators, EU/US number formats).
 - Produces both a clean dataset and an executive-friendly dashboard.
+- Sample data provided in portfolio are random data users can train on. 
 
 ---
 
